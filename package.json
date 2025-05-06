@@ -75,6 +75,54 @@
           "type": "number",
           "default": 5,
           "description": "Minutes of inactivity before showing a reminder"
+        },
+        "alex.taskStatuses": {
+          "type": "array",
+          "default": ["dev", "code_review", "to_deploy", "deployed"],
+          "description": "Available task statuses",
+          "items": {
+            "type": "string"
+          }
+        },
+        "alex.environments": {
+          "type": "array",
+          "default": ["dev", "centest", "uat", "weekc", "production"],
+          "description": "Available environments",
+          "items": {
+            "type": "string"
+          }
+        },
+        "alex.pomodoro": {
+          "type": "object",
+          "default": {
+            "workDuration": 25,
+            "shortBreakDuration": 5,
+            "longBreakDuration": 15,
+            "longBreakInterval": 4
+          },
+          "description": "Pomodoro timer settings"
+        },
+        "alex.focusMode": {
+          "type": "object",
+          "default": {
+            "hideSidebar": true,
+            "hideActivityBar": true,
+            "hideStatusBar": true,
+            "hidePanel": true,
+            "hideMinimap": true,
+            "hideLineNumbers": true
+          },
+          "description": "Focus mode settings"
+        },
+        "alex.notifications": {
+          "type": "object",
+          "default": {
+            "enableInactivityAlerts": true,
+            "inactivityThreshold": 5,
+            "enablePomodoroNotifications": true,
+            "enableTaskReminders": true
+          },
+          "description": "Notification settings"
         }
       }
     }

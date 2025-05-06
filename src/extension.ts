@@ -107,6 +107,11 @@ class AlexProvider implements vscode.WebviewViewProvider {
         await config.update('focusMode', this._settings.focusMode, true);
         await config.update('notifications', this._settings.notifications, true);
         
+        // If Pomodoro settings were updated and timer is running, restart it
+        if (settings.pomodoro && this._pomodoroTimer) {
+            this._startPomodoro();
+        }
+        
         // Update webview
         this._updateWebview();
     }
@@ -152,7 +157,7 @@ class AlexProvider implements vscode.WebviewViewProvider {
     }
 
     private _startPomodoro() {
-        const duration = vscode.workspace.getConfiguration('alex').get<number>('pomodoroDuration') || 25;
+        const duration = this._settings.pomodoro.workDuration;
         
         if (this._pomodoroTimer) {
             clearTimeout(this._pomodoroTimer);
@@ -165,15 +170,32 @@ class AlexProvider implements vscode.WebviewViewProvider {
             if (remaining === 0) {
                 vscode.window.showInformationMessage('Pomodoro session complete! Time for a break.');
                 clearInterval(this._pomodoroTimer);
+                this._pomodoroTimer = undefined;
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'updateTimer',
+                        time: '00:00'
+                    });
+                }
             } else {
                 const minutes = Math.floor(remaining / (60 * 1000));
                 const seconds = Math.floor((remaining % (60 * 1000)) / 1000);
-                this._view?.webview.postMessage({
-                    type: 'updateTimer',
-                    time: `${minutes}:${seconds.toString().padStart(2, '0')}`
-                });
+                if (this._view) {
+                    this._view.webview.postMessage({
+                        type: 'updateTimer',
+                        time: `${minutes}:${seconds.toString().padStart(2, '0')}`
+                    });
+                }
             }
         }, 1000);
+
+        // Initial timer update
+        if (this._view) {
+            this._view.webview.postMessage({
+                type: 'updateTimer',
+                time: `${duration}:00`
+            });
+        }
     }
 
     private _toggleFocusMode() {
@@ -275,165 +297,189 @@ class AlexProvider implements vscode.WebviewViewProvider {
                 color: var(--vscode-foreground);
                 max-width: 800px;
                 margin: 0 auto;
+                line-height: 1.5;
             }
 
             .section {
                 background: var(--vscode-editor-background);
                 border: 1px solid var(--vscode-panel-border);
-                border-radius: 6px;
-                padding: 16px;
-                margin-bottom: 20px;
+                border-radius: 8px;
+                padding: 20px;
+                margin-bottom: 24px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+
+            .section:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             }
 
             .section-title {
-                font-size: 1.2em;
+                font-size: 1.3em;
                 font-weight: 600;
-                margin-bottom: 12px;
+                margin-bottom: 16px;
                 color: var(--vscode-foreground);
                 display: flex;
                 align-items: center;
                 gap: 8px;
+                padding-bottom: 12px;
+                border-bottom: 2px solid var(--vscode-panel-border);
             }
 
             .timer {
-                font-size: 32px;
+                font-size: 48px;
                 text-align: center;
-                margin: 20px 0;
-                font-weight: 600;
+                margin: 24px 0;
+                font-weight: 700;
                 color: var(--vscode-foreground);
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                font-family: 'SF Mono', 'Consolas', monospace;
             }
 
             .controls {
                 display: flex;
-                gap: 8px;
-                margin-bottom: 16px;
+                gap: 12px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
             }
 
             button {
                 background: var(--vscode-button-background);
                 color: var(--vscode-button-foreground);
                 border: none;
-                padding: 8px 16px;
+                padding: 10px 20px;
                 cursor: pointer;
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 14px;
+                font-weight: 500;
                 display: flex;
                 align-items: center;
-                gap: 6px;
-                transition: background-color 0.2s;
+                gap: 8px;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
 
             button:hover {
                 background: var(--vscode-button-hoverBackground);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+            }
+
+            button:active {
+                transform: translateY(0);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             }
 
             .task-form {
                 display: flex;
                 flex-direction: column;
-                gap: 12px;
+                gap: 16px;
                 width: 100%;
             }
 
             .form-group {
                 display: flex;
                 flex-direction: column;
-                gap: 4px;
+                gap: 6px;
                 width: 100%;
             }
 
             .form-group label {
-                font-size: 12px;
-                color: var(--vscode-descriptionForeground);
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--vscode-foreground);
+                margin-bottom: 4px;
             }
 
-            input, textarea {
+            input, textarea, select {
                 width: 100%;
-                padding: 8px 12px;
+                padding: 10px 14px;
                 background: var(--vscode-input-background);
                 color: var(--vscode-input-foreground);
                 border: 1px solid var(--vscode-input-border);
-                border-radius: 4px;
+                border-radius: 6px;
                 font-size: 14px;
                 box-sizing: border-box;
+                transition: all 0.2s ease;
+            }
+
+            input:focus, textarea:focus, select:focus {
+                outline: none;
+                border-color: var(--vscode-focusBorder);
+                box-shadow: 0 0 0 2px rgba(var(--vscode-focusBorder-rgb), 0.2);
             }
 
             textarea {
-                min-height: 80px;
+                min-height: 100px;
                 resize: vertical;
+                line-height: 1.5;
             }
 
             .task-list {
                 display: flex;
                 flex-direction: column;
-                gap: 12px;
+                gap: 16px;
             }
 
             .task-item {
                 background: var(--vscode-editor-background);
-                padding: 16px;
+                padding: 20px;
                 border: 1px solid var(--vscode-panel-border);
-                border-radius: 6px;
-                transition: transform 0.2s;
+                border-radius: 8px;
+                transition: all 0.2s ease;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             }
 
             .task-item:hover {
                 transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             }
 
             .task-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 8px;
+                margin-bottom: 12px;
             }
 
             .task-id {
                 font-weight: 600;
+                font-size: 1.1em;
                 color: var(--vscode-foreground);
             }
 
             .task-time {
                 font-size: 12px;
                 color: var(--vscode-descriptionForeground);
+                background: var(--vscode-badge-background);
+                padding: 4px 8px;
+                border-radius: 4px;
             }
 
             .task-notes {
                 color: var(--vscode-foreground);
-                margin: 8px 0;
-                line-height: 1.4;
-            }
-
-            .task-files {
-                font-size: 12px;
-                color: var(--vscode-descriptionForeground);
-                margin-top: 8px;
-            }
-
-            .empty-state {
-                text-align: center;
-                padding: 32px;
-                color: var(--vscode-descriptionForeground);
-            }
-
-            select {
-                width: 100%;
-                padding: 8px 12px;
-                background: var(--vscode-input-background);
-                color: var(--vscode-input-foreground);
-                border: 1px solid var(--vscode-input-border);
-                border-radius: 4px;
+                margin: 12px 0;
+                line-height: 1.6;
                 font-size: 14px;
-                box-sizing: border-box;
-                cursor: pointer;
             }
 
-            .status-badge {
-                display: inline-block;
-                padding: 4px 8px;
-                border-radius: 12px;
+            .task-meta {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-top: 12px;
+                flex-wrap: wrap;
+            }
+
+            .status-badge, .environment-badge {
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 12px;
+                border-radius: 16px;
                 font-size: 12px;
                 font-weight: 500;
-                margin-right: 8px;
+                letter-spacing: 0.3px;
             }
 
             .status-dev { background: #4DABF7; color: white; }
@@ -441,71 +487,34 @@ class AlexProvider implements vscode.WebviewViewProvider {
             .status-to_deploy { background: #FF922B; color: white; }
             .status-deployed { background: #51CF66; color: white; }
 
-            .environment-badge {
-                display: inline-block;
-                padding: 4px 8px;
-                border-radius: 12px;
-                font-size: 12px;
-                font-weight: 500;
-            }
-
             .env-dev { background: #4DABF7; color: white; }
             .env-centest { background: #FF922B; color: white; }
             .env-uat { background: #FF6B6B; color: white; }
             .env-weekc { background: #845EF7; color: white; }
             .env-production { background: #51CF66; color: white; }
 
-            .task-meta {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-top: 8px;
-            }
-
-            .filter-controls {
-                display: flex;
-                gap: 8px;
-                margin-bottom: 16px;
-                flex-wrap: wrap;
-            }
-
-            .filter-group {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-            }
-
             .task-actions {
                 display: flex;
                 gap: 8px;
-                margin-top: 8px;
-            }
-
-            .edit-form {
-                display: none;
-                margin-top: 8px;
-                padding: 8px;
-                background: var(--vscode-editor-background);
-                border: 1px solid var(--vscode-panel-border);
-                border-radius: 4px;
-            }
-
-            .edit-form.active {
-                display: block;
+                margin-top: 16px;
+                padding-top: 16px;
+                border-top: 1px solid var(--vscode-panel-border);
             }
 
             .action-button {
-                padding: 4px 8px;
+                padding: 6px 12px;
                 font-size: 12px;
                 background: var(--vscode-button-secondaryBackground);
                 color: var(--vscode-button-secondaryForeground);
                 border: none;
                 border-radius: 4px;
                 cursor: pointer;
+                transition: all 0.2s ease;
             }
 
             .action-button:hover {
                 background: var(--vscode-button-secondaryHoverBackground);
+                transform: translateY(-1px);
             }
 
             .action-button.delete {
@@ -518,114 +527,55 @@ class AlexProvider implements vscode.WebviewViewProvider {
                 opacity: 0.9;
             }
 
-            .focus-mode-indicator {
-                display: none;
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: var(--vscode-errorForeground);
-                color: white;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-size: 12px;
-                z-index: 1000;
-            }
-
-            .focus-mode-indicator.active {
-                display: block;
-            }
-
-            .settings-section {
-                margin-top: 20px;
-                padding: 16px;
-                background: var(--vscode-editor-background);
-                border: 1px solid var(--vscode-panel-border);
-                border-radius: 6px;
-            }
-
-            .settings-group {
-                margin-bottom: 16px;
-            }
-
-            .settings-group-title {
-                font-weight: 600;
-                margin-bottom: 8px;
-            }
-
-            .settings-row {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 8px;
-            }
-
-            .settings-input {
-                flex: 1;
-            }
-
-            .settings-actions {
-                display: flex;
-                gap: 8px;
-            }
-
-            .settings-button {
-                padding: 4px 8px;
-                font-size: 12px;
-            }
-
             .file-selection {
                 max-height: 400px;
                 overflow-y: auto;
                 border: 1px solid var(--vscode-panel-border);
-                border-radius: 4px;
+                border-radius: 6px;
                 margin-top: 8px;
                 background: var(--vscode-editor-background);
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
             }
 
             .file-search-container {
                 position: sticky;
                 top: 0;
                 background: var(--vscode-editor-background);
-                padding: 12px;
+                padding: 16px;
                 border-bottom: 1px solid var(--vscode-panel-border);
                 z-index: 1;
             }
 
             .file-search-input {
                 width: 100%;
-                padding: 8px 12px;
+                padding: 10px 14px;
                 border: 1px solid var(--vscode-input-border);
-                border-radius: 4px;
+                border-radius: 6px;
                 background: var(--vscode-input-background);
                 color: var(--vscode-input-foreground);
-                font-size: 13px;
+                font-size: 14px;
+                transition: all 0.2s ease;
             }
 
             .file-search-input:focus {
-                outline: 1px solid var(--vscode-focusBorder);
+                outline: none;
                 border-color: var(--vscode-focusBorder);
-            }
-
-            .file-search-input::placeholder {
-                color: var(--vscode-input-placeholderForeground);
-            }
-
-            .file-list {
-                padding: 8px;
+                box-shadow: 0 0 0 2px rgba(var(--vscode-focusBorder-rgb), 0.2);
             }
 
             .file-group {
                 margin-bottom: 16px;
                 border: 1px solid var(--vscode-panel-border);
-                border-radius: 4px;
+                border-radius: 6px;
                 overflow: hidden;
+                background: var(--vscode-editor-background);
             }
 
             .file-group-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding: 8px 12px;
+                padding: 12px 16px;
                 background: var(--vscode-editor-lineHighlightBackground);
                 border-bottom: 1px solid var(--vscode-panel-border);
             }
@@ -639,18 +589,22 @@ class AlexProvider implements vscode.WebviewViewProvider {
             .file-group-count {
                 font-size: 12px;
                 color: var(--vscode-descriptionForeground);
+                background: var(--vscode-badge-background);
+                padding: 2px 8px;
+                border-radius: 12px;
             }
 
             .file-group-content {
-                padding: 4px;
+                padding: 8px;
             }
 
             .file-select-item {
                 display: flex;
                 align-items: center;
-                padding: 6px 8px;
+                padding: 8px 12px;
                 border-radius: 4px;
-                transition: background-color 0.2s;
+                transition: background-color 0.2s ease;
+                margin: 2px 0;
             }
 
             .file-select-item:hover {
@@ -659,7 +613,9 @@ class AlexProvider implements vscode.WebviewViewProvider {
 
             .file-select-item input[type="checkbox"] {
                 margin: 0;
-                margin-right: 8px;
+                margin-right: 12px;
+                width: 16px;
+                height: 16px;
             }
 
             .file-select-item label {
@@ -674,13 +630,130 @@ class AlexProvider implements vscode.WebviewViewProvider {
             .file-name {
                 color: var(--vscode-foreground);
                 font-size: 13px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
 
             .no-results {
-                padding: 12px;
+                padding: 24px;
                 text-align: center;
                 color: var(--vscode-descriptionForeground);
                 font-style: italic;
+                background: var(--vscode-editor-background);
+                border-radius: 6px;
+                margin: 16px;
+            }
+
+            .filter-controls {
+                display: flex;
+                gap: 16px;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+                padding: 16px;
+                background: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-panel-border);
+                border-radius: 6px;
+            }
+
+            .filter-group {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex: 1;
+                min-width: 200px;
+            }
+
+            .filter-group label {
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--vscode-foreground);
+                white-space: nowrap;
+            }
+
+            .filter-group select {
+                flex: 1;
+                min-width: 150px;
+            }
+
+            .settings-section {
+                margin-top: 24px;
+                padding: 20px;
+                background: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-panel-border);
+                border-radius: 8px;
+            }
+
+            .settings-group {
+                margin-bottom: 24px;
+                padding-bottom: 24px;
+                border-bottom: 1px solid var(--vscode-panel-border);
+            }
+
+            .settings-group:last-child {
+                margin-bottom: 0;
+                padding-bottom: 0;
+                border-bottom: none;
+            }
+
+            .settings-group-title {
+                font-weight: 600;
+                font-size: 1.1em;
+                margin-bottom: 16px;
+                color: var(--vscode-foreground);
+            }
+
+            .settings-row {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+
+            .settings-input {
+                flex: 1;
+            }
+
+            .settings-actions {
+                display: flex;
+                gap: 12px;
+                margin-top: 16px;
+            }
+
+            .settings-button {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+
+            .focus-mode-indicator {
+                display: none;
+                position: fixed;
+                top: 16px;
+                right: 16px;
+                background: var(--vscode-errorForeground);
+                color: white;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+                z-index: 1000;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                animation: slideIn 0.3s ease;
+            }
+
+            @keyframes slideIn {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+
+            .focus-mode-indicator.active {
+                display: block;
             }
         `;
 
@@ -923,6 +996,12 @@ class AlexProvider implements vscode.WebviewViewProvider {
                     type: 'updatePomodoroSettings',
                     settings: settings
                 });
+
+                // Update the timer display immediately
+                const timerElement = document.getElementById('timer');
+                if (timerElement) {
+                    timerElement.textContent = settings.workDuration + ':00';
+                }
             }
 
             function updateFocusModeSettings() {
