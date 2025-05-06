@@ -1,0 +1,100 @@
+{
+  "name": "alex-adhd-buddy",
+  "displayName": "Alex - ADHD Buddy",
+  "description": "An ADHD-friendly development companion for VS Code with task management, focus mode, and Pomodoro timer",
+  "version": "0.0.2",
+  "publisher": "BrianGriffin",
+  "private": false,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "adhd",
+    "productivity",
+    "focus",
+    "pomodoro",
+    "task-management"
+  ],
+  "icon": "resources/alex-icon.jpeg",
+  "galleryBanner": {
+    "color": "#C80000",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "alex.startPomodoro",
+        "title": "Start Pomodoro Timer"
+      },
+      {
+        "command": "alex.toggleFocusMode",
+        "title": "Toggle Focus Mode"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "alex-sidebar",
+          "title": "Alex",
+          "icon": "resources/alex-icon.jpg"
+        }
+      ]
+    },
+    "views": {
+      "alex-sidebar": [
+        {
+          "type": "webview",
+          "id": "alexView",
+          "name": "Alex - ADHD Buddy",
+          "initialSize": 300
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Alex",
+      "properties": {
+        "alex.pomodoroDuration": {
+          "type": "number",
+          "default": 25,
+          "description": "Duration of Pomodoro sessions in minutes"
+        },
+        "alex.breakDuration": {
+          "type": "number",
+          "default": 5,
+          "description": "Duration of break sessions in minutes"
+        },
+        "alex.inactivityThreshold": {
+          "type": "number",
+          "default": 5,
+          "description": "Minutes of inactivity before showing a reminder"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^16.18.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2",
+    "@vscode/vsce": "^2.24.0"
+  }
+} 
